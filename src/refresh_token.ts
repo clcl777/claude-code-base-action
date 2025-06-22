@@ -15,9 +15,33 @@ export async function refreshTokens(): Promise<RefreshTokenResult> {
     console.log("Starting Claude Code login process...");
 
     try {
-        // Launch Claude Code process in interactive mode
-        const claudeProcess = spawn("claude", [], {
+        // Set environment variables to disable browser auto-opening and force URL display
+        const env = {
+            ...process.env,
+            BROWSER: "none",           // Disable browser opening
+            NO_BROWSER: "1",           // Alternative way to disable browser
+            DISABLE_BROWSER: "1",      // Another way to disable browser
+            DISPLAY_URL: "1",          // Force URL display
+            CLI_MODE: "1",             // CLI mode to ensure text output
+            DEBUG: "1",                // Enable debug mode
+            VERBOSE: "1",              // Enable verbose mode
+            HEADLESS: "1",             // Headless mode
+            CI: "1",                   // Continuous Integration mode (often disables browser)
+            NON_INTERACTIVE: "1",      // Non-interactive mode
+            TERM: "dumb",              // Simple terminal mode
+            DISPLAY: "",               // Clear display (Unix systems)
+            BROWSER_DISABLE: "1",      // Another browser disable variant
+            NO_OPEN: "1"               // Prevent opening external applications
+        };
+
+        // Launch Claude Code process with options to prevent browser opening and increase verbosity
+        const claudeArgs: string[] = [];  // No special arguments needed
+
+        console.log("🔧 Launching Claude Code with environment variables to disable browser...");
+
+        const claudeProcess = spawn("claude", claudeArgs, {
             stdio: ["pipe", "pipe", "pipe"],
+            env: env
         });
 
         let output = "";
@@ -27,37 +51,67 @@ export async function refreshTokens(): Promise<RefreshTokenResult> {
         let menuDisplayed = false;
         let urlDetected = false;
 
-        // Function to extract URL from text
+        // Enhanced URL extraction function
         const extractUrl = (text: string): string | null => {
-            // Look for URLs starting with http:// or https://
-            const urlRegex = /https?:\/\/[^\s<>"{}|\\^`[\]]+/g;
-            const matches = text.match(urlRegex);
-            if (matches && matches.length > 0) {
-                return matches[0];
+            // Look for various URL patterns
+            const urlPatterns = [
+                /https?:\/\/[^\s<>"{}|\\^`[\]]+/g,                    // Standard HTTP/HTTPS URLs
+                /claude\.ai\/[^\s<>"{}|\\^`[\]]+/g,                  // Claude.ai URLs
+                /anthropic\.com\/[^\s<>"{}|\\^`[\]]+/g,              // Anthropic URLs
+                /Visit:\s*(https?:\/\/[^\s<>"{}|\\^`[\]]+)/g,       // "Visit: URL" format
+                /Open:\s*(https?:\/\/[^\s<>"{}|\\^`[\]]+)/g,        // "Open: URL" format
+                /URL:\s*(https?:\/\/[^\s<>"{}|\\^`[\]]+)/g          // "URL: URL" format
+            ];
+
+            for (const pattern of urlPatterns) {
+                const matches = text.match(pattern);
+                if (matches && matches.length > 0) {
+                    // Return the first URL found, clean up any prefixes
+                    let url = matches[0];
+                    url = url.replace(/^(Visit:|Open:|URL:)\s*/i, '');
+                    return url;
+                }
             }
             return null;
         };
 
-        // Function to detect if menu/choices are displayed
+        // Enhanced menu detection for various login method displays
         const detectMenu = (text: string): boolean => {
             const menuIndicators = [
                 "Choose an option",
                 "Select an option",
                 "Select login method",
+                "login method",
+                "Choose login method",
                 "Press Enter",
                 "continue",
-                "►",
-                "→",
-                ">",
-                "1)",
-                "2)",
-                "[Enter]",
-                "(Enter)",
+                "►", "→", ">",
+                "1)", "2)", "3)",
+                "[Enter]", "(Enter)",
                 "to continue",
-                "to proceed"
+                "to proceed",
+                "OAuth",
+                "Browser login"
             ];
             return menuIndicators.some(indicator =>
                 text.toLowerCase().includes(indicator.toLowerCase())
+            );
+        };
+
+        // Function to detect URL-related messages even when browser doesn't open
+        const detectUrlMessage = (text: string): boolean => {
+            const urlMessages = [
+                "visit the following url",
+                "go to this url",
+                "open this link",
+                "navigate to",
+                "authentication url",
+                "login url",
+                "authorization url",
+                "complete authentication at"
+            ];
+            return urlMessages.some(msg =>
+                text.toLowerCase().includes(msg.toLowerCase())
             );
         };
 
@@ -78,12 +132,17 @@ export async function refreshTokens(): Promise<RefreshTokenResult> {
                 loginUrl = url;
                 urlDetected = true;
                 console.log("🔗 Login URL detected:", url);
-                console.log("🌐 Browser should open automatically to this URL");
+                console.log("🌐 Use this URL for authentication (browser auto-open disabled)");
+            }
+
+            // Check for URL-related messages
+            if (detectUrlMessage(text)) {
+                console.log("🔍 URL message detected - looking for authentication URL...");
             }
 
             // Check for specific login-related messages
             if (text.includes("Opening browser") || text.includes("Visit this URL")) {
-                console.log("📋 Login process initiated - please complete authentication in your browser");
+                console.log("📋 Login process initiated - URL should be displayed");
             }
 
             // Check if menu/choices are displayed
@@ -114,6 +173,12 @@ export async function refreshTokens(): Promise<RefreshTokenResult> {
                 loginUrl = url;
                 urlDetected = true;
                 console.log("🔗 Login URL detected in error stream:", url);
+                console.log("🌐 Use this URL for authentication (browser auto-open disabled)");
+            }
+
+            // Check for URL-related messages in stderr
+            if (detectUrlMessage(text)) {
+                console.log("🔍 URL message detected in error stream - looking for authentication URL...");
             }
 
             // Also check stderr for menu indicators
