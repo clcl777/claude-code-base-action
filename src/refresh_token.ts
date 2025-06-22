@@ -1,4 +1,7 @@
 import { exec, spawn } from "child_process";
+import { existsSync } from "fs";
+import { chmod, mkdir, rmdir, unlink, writeFile } from "fs/promises";
+import { join } from "path";
 import { promisify } from "util";
 
 const execAsync = promisify(exec);
@@ -14,10 +17,63 @@ export interface RefreshTokenResult {
 export async function refreshTokens(): Promise<RefreshTokenResult> {
     console.log("Starting Claude Code login process...");
 
+    // Create temporary directory for mock scripts
+    const tempDir = "/tmp/claude-mock-scripts";
+    let mockScriptsCreated = false;
+
+    // Define mock scripts to intercept browser opening commands
+    const mockScripts = [
+        {
+            name: "open",
+            content: `#!/bin/bash
+echo "🔗 INTERCEPTED URL: $1" >&2
+echo "$1" > /tmp/claude-intercepted-url.txt
+# Optionally, you can still open the browser by uncommenting the next line:
+# /usr/bin/open "$@"
+exit 0
+`
+        },
+        {
+            name: "xdg-open",
+            content: `#!/bin/bash
+echo "🔗 INTERCEPTED URL: $1" >&2
+echo "$1" > /tmp/claude-intercepted-url.txt
+# Optionally, you can still open the browser by uncommenting the next line:
+# /usr/bin/xdg-open "$@"
+exit 0
+`
+        },
+        {
+            name: "start",
+            content: `#!/bin/bash
+echo "🔗 INTERCEPTED URL: $1" >&2  
+echo "$1" > /tmp/claude-intercepted-url.txt
+# Windows start command mock
+exit 0
+`
+        }
+    ];
+
     try {
+        // Create temporary directory
+        if (!existsSync(tempDir)) {
+            await mkdir(tempDir, { recursive: true });
+        }
+
+        // Write and make executable the mock scripts
+        for (const script of mockScripts) {
+            const scriptPath = join(tempDir, script.name);
+            await writeFile(scriptPath, script.content);
+            await chmod(scriptPath, 0o755);
+        }
+        mockScriptsCreated = true;
+        console.log("🔧 Created mock browser opening scripts in", tempDir);
+
         // Set environment variables to disable browser auto-opening and force URL display
         const env = {
             ...process.env,
+            // Add our mock scripts directory to the beginning of PATH
+            PATH: `${tempDir}:${process.env.PATH}`,
             BROWSER: "none",           // Disable browser opening
             NO_BROWSER: "1",           // Alternative way to disable browser
             DISABLE_BROWSER: "1",      // Another way to disable browser
@@ -37,7 +93,8 @@ export async function refreshTokens(): Promise<RefreshTokenResult> {
         // Launch Claude Code process with options to prevent browser opening and increase verbosity
         const claudeArgs: string[] = [];  // No special arguments needed
 
-        console.log("🔧 Launching Claude Code with environment variables to disable browser...");
+        console.log("🔧 Launching Claude Code with URL interception...");
+        console.log("🔧 Modified PATH:", `${tempDir}:${process.env.PATH?.substring(0, 100)}...`);
 
         const claudeProcess = spawn("claude", claudeArgs, {
             stdio: ["pipe", "pipe", "pipe"],
@@ -50,6 +107,34 @@ export async function refreshTokens(): Promise<RefreshTokenResult> {
         let loginUrl = "";
         let menuDisplayed = false;
         let urlDetected = false;
+
+        // Function to check for intercepted URL
+        const checkInterceptedUrl = async (): Promise<string | null> => {
+            try {
+                const { stdout } = await execAsync("cat /tmp/claude-intercepted-url.txt 2>/dev/null || echo ''");
+                const url = stdout.trim();
+                if (url && url.startsWith("http")) {
+                    return url;
+                }
+            } catch (e) {
+                // File doesn't exist yet
+            }
+            return null;
+        };
+
+        // Periodically check for intercepted URL
+        const urlCheckInterval = setInterval(async () => {
+            if (!urlDetected) {
+                const interceptedUrl = await checkInterceptedUrl();
+                if (interceptedUrl) {
+                    loginUrl = interceptedUrl;
+                    urlDetected = true;
+                    console.log("🎯 INTERCEPTED BROWSER URL:", interceptedUrl);
+                    console.log("🌐 Use this URL for authentication");
+                    clearInterval(urlCheckInterval);
+                }
+            }
+        }, 500);
 
         // Enhanced URL extraction function
         const extractUrl = (text: string): string | null => {
@@ -250,6 +335,8 @@ export async function refreshTokens(): Promise<RefreshTokenResult> {
                         console.log("🔗 Login URL was:", loginUrl);
                         console.log("💡 You can manually visit this URL to complete authentication");
                     }
+                    // Clear URL check interval
+                    clearInterval(urlCheckInterval);
                     // Close stdin before killing process
                     try {
                         claudeProcess.stdin.end();
@@ -273,6 +360,7 @@ export async function refreshTokens(): Promise<RefreshTokenResult> {
             claudeProcess.on("close", (code) => {
                 if (!resolved) {
                     clearTimeout(timeoutId);
+                    clearInterval(urlCheckInterval);
                     resolved = true;
                     resolve(code || 0);
                 }
@@ -281,6 +369,7 @@ export async function refreshTokens(): Promise<RefreshTokenResult> {
             claudeProcess.on("error", (error) => {
                 if (!resolved) {
                     clearTimeout(timeoutId);
+                    clearInterval(urlCheckInterval);
                     resolved = true;
                     reject(error);
                 }
@@ -288,6 +377,16 @@ export async function refreshTokens(): Promise<RefreshTokenResult> {
         });
 
         console.log(`Claude process exited with code: ${exitCode}`);
+
+        // Final check for intercepted URL
+        if (!urlDetected) {
+            const finalUrl = await checkInterceptedUrl();
+            if (finalUrl) {
+                loginUrl = finalUrl;
+                urlDetected = true;
+                console.log("🎯 FINAL INTERCEPTED URL:", finalUrl);
+            }
+        }
 
         if (exitCode === 0) {
             console.log("Login process completed successfully");
@@ -313,6 +412,27 @@ export async function refreshTokens(): Promise<RefreshTokenResult> {
         console.error("Failed to refresh tokens:", error);
         const errorMessage = error instanceof Error ? error.message : String(error);
         return { success: false, error: errorMessage };
+    } finally {
+        // Clean up temporary files and directory
+        if (mockScriptsCreated) {
+            try {
+                for (const script of mockScripts) {
+                    const scriptPath = join(tempDir, script.name);
+                    await unlink(scriptPath).catch(() => { }); // Ignore errors
+                }
+                await rmdir(tempDir).catch(() => { }); // Ignore errors
+                console.log("🧹 Cleaned up mock scripts");
+            } catch (e) {
+                console.log("Warning: Failed to clean up mock scripts:", e);
+            }
+        }
+
+        // Clean up intercepted URL file
+        try {
+            await unlink("/tmp/claude-intercepted-url.txt").catch(() => { });
+        } catch (e) {
+            // Ignore cleanup errors
+        }
     }
 }
 
