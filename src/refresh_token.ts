@@ -24,6 +24,8 @@ export async function refreshTokens(): Promise<RefreshTokenResult> {
         let errorOutput = "";
         let isLoginPrompted = false;
         let loginUrl = "";
+        let menuDisplayed = false;
+        let urlDetected = false;
 
         // Function to extract URL from text
         const extractUrl = (text: string): string | null => {
@@ -34,6 +36,29 @@ export async function refreshTokens(): Promise<RefreshTokenResult> {
                 return matches[0];
             }
             return null;
+        };
+
+        // Function to detect if menu/choices are displayed
+        const detectMenu = (text: string): boolean => {
+            const menuIndicators = [
+                "Choose an option",
+                "Select an option",
+                "Select login method",
+                "Press Enter",
+                "continue",
+                "►",
+                "→",
+                ">",
+                "1)",
+                "2)",
+                "[Enter]",
+                "(Enter)",
+                "to continue",
+                "to proceed"
+            ];
+            return menuIndicators.some(indicator =>
+                text.toLowerCase().includes(indicator.toLowerCase())
+            );
         };
 
         // Capture stdout
@@ -49,8 +74,9 @@ export async function refreshTokens(): Promise<RefreshTokenResult> {
 
             // Extract and log URL if found
             const url = extractUrl(text);
-            if (url) {
+            if (url && !urlDetected) {
                 loginUrl = url;
+                urlDetected = true;
                 console.log("🔗 Login URL detected:", url);
                 console.log("🌐 Browser should open automatically to this URL");
             }
@@ -58,6 +84,21 @@ export async function refreshTokens(): Promise<RefreshTokenResult> {
             // Check for specific login-related messages
             if (text.includes("Opening browser") || text.includes("Visit this URL")) {
                 console.log("📋 Login process initiated - please complete authentication in your browser");
+            }
+
+            // Check if menu/choices are displayed
+            if (detectMenu(text) && !menuDisplayed) {
+                menuDisplayed = true;
+                console.log("🎯 Menu/choices detected - sending Enter key...");
+                // Send Enter after a short delay to ensure menu is fully displayed
+                setTimeout(() => {
+                    try {
+                        claudeProcess.stdin.write("\n");
+                        console.log("✅ Enter key sent");
+                    } catch (e) {
+                        console.log("Failed to send Enter key:", e);
+                    }
+                }, 500);
             }
         });
 
@@ -69,9 +110,24 @@ export async function refreshTokens(): Promise<RefreshTokenResult> {
 
             // Also check stderr for URLs (some applications output URLs to stderr)
             const url = extractUrl(text);
-            if (url && !loginUrl) {
+            if (url && !urlDetected) {
                 loginUrl = url;
+                urlDetected = true;
                 console.log("🔗 Login URL detected in error stream:", url);
+            }
+
+            // Also check stderr for menu indicators
+            if (detectMenu(text) && !menuDisplayed) {
+                menuDisplayed = true;
+                console.log("🎯 Menu/choices detected in error stream - sending Enter key...");
+                setTimeout(() => {
+                    try {
+                        claudeProcess.stdin.write("\n");
+                        console.log("✅ Enter key sent");
+                    } catch (e) {
+                        console.log("Failed to send Enter key:", e);
+                    }
+                }, 500);
             }
         });
 
@@ -88,21 +144,33 @@ export async function refreshTokens(): Promise<RefreshTokenResult> {
         console.log("Sending /login command...");
         claudeProcess.stdin.write("/login\n");
 
-        // Wait for response and potentially send additional commands
-        await new Promise((resolve) => setTimeout(resolve, 3000)); // Increased wait time
+        // Wait for menu to appear (menu is always displayed)
+        console.log("⏳ Waiting for login menu to appear...");
 
-        // If needed, we can send additional input here
-        // For example, if Claude prompts for specific actions
-        if (output.includes("Press Enter") || output.includes("continue")) {
-            console.log("Sending Enter to continue...");
-            claudeProcess.stdin.write("\n");
+        // Wait for menu to be detected and Enter to be sent
+        let menuProcessed = false;
+        const menuWaitTime = 10000; // 10 seconds to wait for menu
+        const menuStartTime = Date.now();
+
+        while (!menuProcessed && (Date.now() - menuStartTime) < menuWaitTime) {
+            await new Promise((resolve) => setTimeout(resolve, 500));
+            if (menuDisplayed) {
+                menuProcessed = true;
+                console.log("✅ Menu detected and Enter key sent successfully");
+                break;
+            }
         }
 
-        // Wait a bit more for URL to appear
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        if (!menuProcessed) {
+            console.warn("⚠️ Menu was not detected within timeout, but proceeding...");
+        }
 
-        // Close stdin to signal we're done sending input
-        claudeProcess.stdin.end();
+        // Wait additional time for URL to appear after menu selection
+        console.log("⏳ Waiting for authentication URL to appear...");
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+
+        // Keep connection open for additional responses
+        console.log("🔄 Keeping connection open for authentication completion...");
 
         // Wait for the process to complete or timeout
         const timeoutMs = 120000; // 2 minutes timeout for login
@@ -116,6 +184,12 @@ export async function refreshTokens(): Promise<RefreshTokenResult> {
                     if (loginUrl) {
                         console.log("🔗 Login URL was:", loginUrl);
                         console.log("💡 You can manually visit this URL to complete authentication");
+                    }
+                    // Close stdin before killing process
+                    try {
+                        claudeProcess.stdin.end();
+                    } catch (e) {
+                        // Ignore errors when closing stdin
                     }
                     claudeProcess.kill("SIGTERM");
                     // Give it 3 seconds to terminate gracefully
