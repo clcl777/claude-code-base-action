@@ -1,0 +1,133 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+# Testing Guide
+
+## Test Structure
+
+All tests are located in the [test/](mdc:test) directory with comprehensive coverage:
+
+- [test/validate-env.test.ts](mdc:test/validate-env.test.ts) - Environment validation tests (309 lines)
+- [test/prepare-prompt.test.ts](mdc:test/prepare-prompt.test.ts) - Prompt preparation tests
+- [test/run-claude.test.ts](mdc:test/run-claude.test.ts) - Claude execution tests  
+- [test/setup-oauth.test.ts](mdc:test/setup-oauth.test.ts) - OAuth setup tests
+
+## Testing Framework
+
+Uses **Bun's built-in test runner** with:
+- `describe` and `test` blocks for test organization
+- `beforeEach` and `afterEach` for setup/cleanup
+- Environment variable mocking and restoration
+- Comprehensive error message testing
+
+## Test Categories
+
+### 1. Environment Validation Tests
+
+[test/validate-env.test.ts](mdc:test/validate-env.test.ts) covers all authentication methods:
+
+**Direct Anthropic API:**
+- Valid API key scenarios
+- Missing API key errors
+
+**AWS Bedrock:**
+- Complete configuration validation
+- Missing parameter detection
+- Automatic base URL construction from region
+
+**Google Vertex AI:**
+- Project ID and region validation
+- Optional credential handling
+
+**OAuth Authentication:**
+- Token validation (access, refresh, expires_at)
+- Missing token error handling
+
+### 2. Unit Test Patterns
+
+Environment isolation pattern used throughout:
+```typescript
+beforeEach(() => {
+  originalEnv = { ...process.env };
+  // Clear relevant variables
+});
+
+afterEach(() => {
+  process.env = originalEnv;
+});
+```
+
+## Running Tests
+
+### Local Testing Commands
+
+From [package.json](mdc:package.json):
+- `bun test` - Run all unit tests
+- `bun test test/specific-file.test.ts` - Run specific test file
+- `bun run typecheck` - TypeScript validation
+
+### Integration Testing
+
+Use [test-local.sh](mdc:test-local.sh) for full GitHub Actions workflow testing:
+- Requires Docker and `act` tool
+- Needs `ANTHROPIC_API_KEY` environment variable
+- Tests complete action execution locally
+
+## CI/CD Testing
+
+GitHub Actions workflows in [.github/workflows/](mdc:.github/workflows):
+
+### [ci.yml](mdc:.github/workflows/ci.yml)
+Runs on every push and PR:
+- **Prettier**: Code formatting validation
+- **TypeScript**: Type checking with `bun run typecheck`
+- **Unit Tests**: Full test suite with `bun test`
+
+### [test-action.yml](mdc:.github/workflows/test-action.yml)
+Integration testing for the actual GitHub Action functionality.
+
+## Testing Best Practices
+
+### 1. Environment Management
+- Always save and restore `process.env`
+- Clear relevant variables in `beforeEach`
+- Test both presence and absence of environment variables
+
+### 2. Error Testing
+- Test specific error messages, not just that errors are thrown
+- Use regex patterns for multi-line error messages
+- Test error aggregation (multiple missing variables)
+
+### 3. Mock Data
+- Use realistic test values
+- Test edge cases and boundary conditions
+- Verify both required and optional parameter handling
+
+## Debugging Tests
+
+### Local Debugging
+- Add `console.log` statements in test files
+- Use `bun test --verbose` for detailed output
+- Run specific test suites with file paths
+
+### CI Debugging
+- Check GitHub Actions logs for test failures
+- Verify environment setup in CI runners
+- Compare local vs CI behavior differences
+
+## Test Coverage Areas
+
+The test suite covers:
+- ✅ Environment validation for all auth methods
+- ✅ Prompt preparation and file handling
+- ✅ OAuth token setup
+- ✅ Claude Code execution parameters
+- ✅ Error handling and messaging
+- ✅ Configuration validation
+
+Missing coverage areas to consider:
+- Integration tests with real Claude Code execution
+- Performance testing under load
+- Error recovery scenarios

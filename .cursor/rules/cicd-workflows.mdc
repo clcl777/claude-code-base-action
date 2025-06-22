@@ -1,0 +1,211 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# CI/CD Workflows
+
+## GitHub Actions Workflows
+
+Located in [.github/workflows/](mdc:.github/workflows) directory:
+
+### 1. Continuous Integration: [ci.yml](mdc:.github/workflows/ci.yml)
+
+**Triggers:**
+- Every push to `main` branch
+- All pull requests
+
+**Jobs:**
+- **prettier**: Code formatting validation using Prettier
+- **typecheck**: TypeScript type checking with `bun run typecheck`
+- **test**: Unit test execution with `bun test`
+
+**Runner:** `ubuntu-latest` with Bun v1.2.12
+
+### 2. Action Testing: [test-action.yml](mdc:.github/workflows/test-action.yml)
+
+Integration testing for the actual GitHub Action functionality:
+- Tests real action execution
+- Validates different authentication methods
+- Ensures action works in GitHub Actions environment
+
+### 3. Release Management: [update-major-tag.yml](mdc:.github/workflows/update-major-tag.yml)
+
+**Purpose:** Automatically updates major version tags for releases
+
+**Trigger:** Manual workflow dispatch or release events
+
+**Function:** Maintains Git tags for version management
+
+### 4. Claude PR Integration: [claude-pr.yml](mdc:.github/workflows/claude-pr.yml)
+
+**Purpose:** Demonstrates the action's usage for PR reviews
+
+**Features:**
+- Automated PR analysis using Claude Code
+- Integration with the action itself for dogfooding
+
+## Workflow Patterns
+
+### Standard Job Structure
+
+All workflows follow consistent patterns:
+
+```yaml
+jobs:
+  job-name:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: 1.2.12
+      - name: Install dependencies
+        run: bun install
+      - name: Run specific task
+        run: bun run <task>
+```
+
+### Bun Integration
+
+All workflows use:
+- **Bun Runtime**: Version 1.2.12 consistently
+- **Dependency Installation**: `bun install`
+- **Script Execution**: `bun run` commands from [package.json](mdc:package.json)
+
+## CI/CD Pipeline Flow
+
+### Pull Request Workflow
+1. **Triggered on**: PR creation, updates, pushes to main
+2. **Validation Steps**:
+   - Code formatting check (Prettier)
+   - TypeScript type validation
+   - Unit test execution
+3. **Requirements**: All jobs must pass for PR merge
+
+### Release Workflow
+1. **Manual Trigger**: Via GitHub UI or release creation
+2. **Tag Management**: Updates major version references
+3. **Distribution**: Makes new version available to users
+
+## Environment Configuration
+
+### Secrets Required
+
+**For Testing:**
+- `ANTHROPIC_API_KEY` - For Claude Code testing
+- Additional secrets based on authentication method
+
+**For Release:**
+- `GITHUB_TOKEN` - Automatic token for release operations
+
+### Environment Variables
+
+Workflows use standard GitHub Actions environment:
+- `GITHUB_WORKSPACE` - Working directory
+- `GITHUB_REF` - Git reference
+- `GITHUB_SHA` - Commit SHA
+
+## Quality Gates
+
+### Pre-Merge Requirements
+
+All PRs must pass:
+1. **Prettier Check**: Code must be properly formatted
+2. **TypeScript Check**: No type errors allowed
+3. **Unit Tests**: All tests must pass
+4. **Integration Tests**: Action must execute successfully
+
+### Performance Considerations
+
+- **Parallel Jobs**: CI runs formattin, typecheck, and tests in parallel
+- **Caching**: Bun dependencies cached when possible
+- **Fast Feedback**: Jobs fail fast on first error
+
+## Local vs CI Consistency
+
+### Command Parity
+
+Same commands work locally and in CI:
+- `bun run format:check` - Used in both environments
+- `bun run typecheck` - Identical validation
+- `bun test` - Same test execution
+
+### Environment Differences
+
+**Local Development:**
+- Uses [test-local.sh](mdc:test-local.sh) for action testing
+- Requires Docker for integration tests
+- Uses personal API keys
+
+**CI Environment:**
+- Uses GitHub Actions secrets
+- Runs in clean Ubuntu containers
+- No Docker required for unit tests
+
+## Debugging CI Issues
+
+### Common Failures
+
+**Formatting Issues:**
+- Run `bun run format` to fix automatically
+- Check [.prettierrc](mdc:.prettierrc) for configuration
+
+**Type Errors:**
+- Fix TypeScript errors shown in logs
+- Verify [tsconfig.json](mdc:tsconfig.json) configuration
+
+**Test Failures:**
+- Run `bun test` locally to reproduce
+- Check test environment setup in [test/](mdc:test) files
+
+### Debugging Strategies
+
+**View Detailed Logs:**
+- Click on failed job in GitHub Actions
+- Expand log sections for error details
+- Compare with local execution results
+
+**Environment Debugging:**
+- Add debug output to workflows
+- Check environment variables and secrets
+- Verify Bun version consistency
+
+## Monitoring and Maintenance
+
+### Workflow Health
+
+Monitor for:
+- Consistent execution times
+- Success rates across different trigger types
+- Dependency update needs
+
+### Updates Required
+
+**Bun Version Updates:**
+- Update version in all workflow files
+- Test compatibility with codebase
+- Update [action.yml](mdc:action.yml) if needed
+
+**Action Dependencies:**
+- Keep `actions/checkout` and `oven-sh/setup-bun` updated
+- Test new versions before deployment
+- Update pinned versions with security fixes
+
+## Custom Action Testing
+
+### Integration with Self
+
+The project uses itself for testing:
+- [claude-pr.yml](mdc:.github/workflows/claude-pr.yml) uses the action
+- Provides real-world validation
+- Demonstrates usage patterns
+- Tests OAuth authentication in practice
+
+### Testing Different Authentication Methods
+
+Workflows can test multiple auth methods:
+- OAuth with stored tokens
+- API key authentication
+- Cloud provider integrations
+- Different model configurations

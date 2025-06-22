@@ -1,0 +1,190 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+# Scripts and Utilities
+
+## Local Testing Script: [test-local.sh](mdc:test-local.sh)
+
+Primary script for local development and testing:
+
+### Purpose
+- Tests the complete GitHub Action workflow locally
+- Uses Docker and `act` tool to simulate GitHub Actions environment
+- Validates action functionality before pushing changes
+
+### Requirements
+- Docker running locally
+- `ANTHROPIC_API_KEY` environment variable set
+- Homebrew (on macOS) for automatic `act` installation
+
+### Features
+- **Automatic Setup**: Installs `act` if not present
+- **Apple Silicon Support**: Adds `--container-architecture linux/amd64` for ARM Macs
+- **Error Handling**: Checks for Docker and API key requirements
+- **Workflow Execution**: Runs the complete action workflow in containerized environment
+
+### Usage
+```bash
+export ANTHROPIC_API_KEY="your-api-key"
+./test-local.sh
+```
+
+## Git Hooks
+
+### Installation: [scripts/install-hooks.sh](mdc:scripts/install-hooks.sh)
+
+Sets up Git hooks for development workflow:
+- Copies [scripts/pre-push](mdc:scripts/pre-push) to `.git/hooks/pre-push`
+- Makes the hook executable
+- Ensures quality checks run before pushing
+
+### Pre-Push Hook: [scripts/pre-push](mdc:scripts/pre-push)
+
+Comprehensive validation before Git push:
+
+#### Checks Performed
+1. **Format Check**: `bun run format:check` - Validates Prettier formatting
+2. **Type Check**: `bun run typecheck` - TypeScript validation
+3. **Unit Tests**: `bun test` - Complete test suite execution
+
+#### Behavior
+- Prevents push if any check fails
+- Provides clear error messages
+- Maintains code quality standards
+- Integrates with development workflow
+
+### Setup Commands
+
+From [package.json](mdc:package.json):
+```bash
+bun run install-hooks  # Install Git hooks
+```
+
+## Configuration Files
+
+### TypeScript: [tsconfig.json](mdc:tsconfig.json)
+
+Development configuration:
+- **Strict Mode**: Enabled for type safety
+- **Target**: ES2022 for modern JavaScript features
+- **Module System**: ESNext with Node.js resolution
+- **Type Checking**: Comprehensive validation rules
+
+### Prettier: [.prettierrc](mdc:.prettierrc)
+
+Code formatting standards:
+- Consistent indentation and spacing
+- Automatic code style enforcement
+- Integrated with CI/CD pipeline
+
+### NPM Configuration: [.npmrc](mdc:.npmrc)
+
+Package management settings:
+- Registry configuration
+- Installation preferences
+- Build optimization settings
+
+## Package Management
+
+### Dependencies: [package.json](mdc:package.json)
+
+**Production Dependencies:**
+- `@actions/core` - GitHub Actions toolkit
+
+**Development Dependencies:**
+- `@types/bun` - Bun TypeScript types
+- `@types/node` - Node.js TypeScript types
+- `prettier` - Code formatting
+- `typescript` - TypeScript compiler
+
+### Lock File: [bun.lock](mdc:bun.lock)
+
+Dependency lock file for:
+- Reproducible builds
+- Version consistency
+- Security through dependency pinning
+
+## Development Scripts
+
+### Available Commands
+
+**Quality Assurance:**
+- `bun run format` - Apply Prettier formatting
+- `bun run format:check` - Check formatting without changes
+- `bun run typecheck` - TypeScript type validation
+
+**Testing:**
+- `bun test` - Run complete test suite
+- `bun test test/specific.test.ts` - Run specific test file
+
+**Setup:**
+- `bun install` - Install dependencies
+- `bun run install-hooks` - Setup Git hooks
+
+## Utility Patterns
+
+### Local Development Flow
+1. `bun install` - Install dependencies
+2. `bun run install-hooks` - Setup Git hooks  
+3. Make changes to source code
+4. `./test-local.sh` - Test locally
+5. `bun test` - Run unit tests
+6. Git commit and push (triggers pre-push hook)
+
+### CI/CD Integration
+
+Scripts integrate with [.github/workflows/ci.yml](mdc:.github/workflows/ci.yml):
+- Same commands used locally and in CI
+- Consistent validation across environments
+- Fail-fast approach for quick feedback
+
+### Self-Hosted Runner Support
+
+[action.yml](mdc:action.yml) includes robust cleanup for self-hosted runners:
+- Aggressive cleanup of previous installations
+- Manual file removal from global directories
+- npm cache clearing
+- Force installation with conflict resolution
+
+## Troubleshooting Scripts
+
+### Common Issues
+
+**Permission Errors:**
+```bash
+chmod +x ./test-local.sh
+chmod +x scripts/install-hooks.sh
+```
+
+**Docker Not Running:**
+```bash
+docker ps  # Check Docker status
+```
+
+**Missing API Key:**
+```bash
+echo $ANTHROPIC_API_KEY  # Verify API key is set
+```
+
+### Debug Mode
+
+For verbose output during local testing:
+```bash
+act push -v --secret ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"
+```
+
+## Script Maintenance
+
+### Adding New Scripts
+- Place in `scripts/` directory
+- Follow existing naming conventions
+- Add to [package.json](mdc:package.json) if needed
+- Update this documentation
+
+### Modifying Existing Scripts
+- Test thoroughly with `./test-local.sh`
+- Ensure cross-platform compatibility
+- Update error messages and documentation
+- Consider backward compatibility

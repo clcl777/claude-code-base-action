@@ -1,0 +1,57 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# GitHub Action Configuration
+
+The action is configured in [action.yml](mdc:action.yml) with comprehensive inputs and outputs.
+
+## Key Inputs
+
+### Authentication (Choose One)
+- **OAuth (Recommended)**: `use_oauth: true` + `claude_access_token`, `claude_refresh_token`, `claude_expires_at`
+- **Direct API**: `anthropic_api_key`
+- **AWS Bedrock**: `use_bedrock: true` + AWS environment variables
+- **Google Vertex AI**: `use_vertex: true` + GCP environment variables
+
+### Prompt Configuration
+- `prompt` - Direct prompt string (mutually exclusive with `prompt_file`)
+- `prompt_file` - Path to prompt file (mutually exclusive with `prompt`)
+- `max_turns` - Limit conversation turns
+
+### Tool Configuration
+- `allowed_tools` - Comma-separated list of allowed tools
+- `disallowed_tools` - Comma-separated list of disallowed tools
+- `mcp_config` - MCP configuration JSON file path
+
+### Model & Runtime
+- `model` - Claude model to use (defaults to `claude-3-7-sonnet-20250219`)
+- `timeout_minutes` - Execution timeout (default: 10)
+- `use_node_cache` - Enable Node.js caching for projects with lock files
+
+## Outputs
+
+- `conclusion` - Execution status (`success` or `failure`)
+- `execution_file` - Path to JSON execution log
+
+## Composite Action Steps
+
+The action runs as a composite action with these steps:
+
+1. **Setup Node.js** - Sets up Node.js 18.x environment
+2. **Install Bun** - Installs Bun runtime (v1.2.11)
+3. **Install Dependencies** - Runs `bun install` in action directory
+4. **Install Claude Code** - Installs `@anthropic-ai/claude-code@1.0.2` globally
+5. **Run Claude Code Action** - Executes [src/index.ts](mdc:src/index.ts) with environment variables
+
+## Environment Variable Mapping
+
+Input parameters are mapped to environment variables:
+- `INPUT_*` - Direct input mappings
+- `CLAUDE_CODE_*` - Claude Code specific flags
+- `ANTHROPIC_*` - Anthropic API configuration
+- `AWS_*` - AWS Bedrock configuration
+- `GOOGLE_*` / `CLOUD_ML_*` - Google Vertex AI configuration
+
+See the `env:` section in [action.yml](mdc:action.yml) for complete mappings.

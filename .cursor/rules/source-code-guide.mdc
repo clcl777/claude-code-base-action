@@ -1,0 +1,64 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Source Code Guide
+
+## Main Entry Point: [src/index.ts](mdc:src/index.ts)
+
+The main entry point orchestrates the action execution:
+
+1. Validates environment variables via [src/validate-env.ts](mdc:src/validate-env.ts)
+2. Sets up OAuth authentication via [src/setup-oauth.ts](mdc:src/setup-oauth.ts)
+3. Prepares prompts via [src/prepare-prompt.ts](mdc:src/prepare-prompt.ts)
+4. Executes Claude Code via [src/run-claude.ts](mdc:src/run-claude.ts)
+
+## Key Modules
+
+### Environment Validation: [src/validate-env.ts](mdc:src/validate-env.ts)
+- Validates required environment variables based on authentication method
+- Ensures prompt XOR prompt_file exclusivity
+- Handles model parameter migration (`anthropic_model` → `model`)
+- Sets appropriate provider flags (Bedrock, Vertex, OAuth)
+
+### OAuth Setup: [src/setup-oauth.ts](mdc:src/setup-oauth.ts)
+- Configures Claude AI OAuth authentication
+- Sets up environment variables for Claude Code OAuth flow
+- Handles token refresh logic
+
+### Prompt Preparation: [src/prepare-prompt.ts](mdc:src/prepare-prompt.ts)
+- Processes direct prompts or reads from prompt files
+- Validates prompt content existence
+- Handles file path resolution and content reading
+
+### Claude Runner: [src/run-claude.ts](mdc:src/run-claude.ts)
+- Constructs Claude Code command with all parameters
+- Handles tool configurations (allowed/disallowed)
+- Manages MCP configuration
+- Executes Claude Code and captures output
+- Sets GitHub Actions outputs (`conclusion`, `execution_file`)
+
+## Error Handling Patterns
+
+All modules follow consistent error handling:
+- Use `@actions/core` for logging and setting outputs
+- Graceful failure with proper error messages
+- Exit with appropriate codes for GitHub Actions
+
+## Key Dependencies
+
+From [package.json](mdc:package.json):
+- `@actions/core` - GitHub Actions toolkit for inputs/outputs/logging
+- TypeScript for type safety
+- Bun for runtime and package management
+
+## File Naming Conventions
+
+- `*.ts` - TypeScript source files
+- Kebab-case for file names
+- Descriptive names reflecting functionality (e.g., `validate-env.ts`, `setup-oauth.ts`)
+
+## Testing
+
+Test files should be placed in the `test/` directory and follow the same naming convention with `.test.ts` suffix.

@@ -1,0 +1,206 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Examples and Usage Patterns
+
+## Example Workflows
+
+### Main Example: [examples/issue-triage.yml](mdc:examples/issue-triage.yml)
+
+Complete GitHub workflow for automated issue triage using Claude Code.
+
+### Additional Examples in Documentation
+
+[README.md](mdc:README.md) contains comprehensive usage examples:
+
+#### 1. Basic OAuth Usage
+```yaml
+- name: Run Claude Code with OAuth
+  uses: Akira-papa/claude-code-base-action@main
+  with:
+    prompt: "Your prompt here"
+    allowed_tools: "Bash(git:*),View,GlobTool,GrepTool,BatchTool"
+    use_oauth: "true"
+    claude_access_token: ${{ secrets.CLAUDE_ACCESS_TOKEN }}
+    claude_refresh_token: ${{ secrets.CLAUDE_REFRESH_TOKEN }}
+    claude_expires_at: ${{ secrets.CLAUDE_EXPIRES_AT }}
+```
+
+#### 2. Prompt File Usage
+```yaml
+- name: Run Claude Code with prompt file
+  uses: Akira-papa/claude-code-base-action@main
+  with:
+    prompt_file: "/path/to/prompt.txt"
+    allowed_tools: "Bash(git:*),View,GlobTool,GrepTool,BatchTool"
+```
+
+#### 3. Conversation Limits
+```yaml
+- name: Run Claude Code with limited turns
+  uses: Akira-papa/claude-code-base-action@main
+  with:
+    prompt: "Your prompt here"
+    max_turns: "5"
+```
+
+## Authentication Patterns
+
+### 1. OAuth Authentication (Recommended)
+- Use `use_oauth: "true"`
+- Requires three secrets: access token, refresh token, expires timestamp
+- Best for Claude Max subscribers
+
+### 2. Direct API Key
+- Use `anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}`
+- Traditional authentication method
+
+### 3. AWS Bedrock
+- Set `use_bedrock: "true"`
+- Requires AWS credentials via environment variables
+
+### 4. Google Vertex AI
+- Set `use_vertex: "true"`
+- Requires GCP credentials and project configuration
+
+## Tool Configuration Patterns
+
+### Common Tool Sets
+
+**Basic Development Tools:**
+```yaml
+allowed_tools: "Bash(git:*),View,GlobTool,GrepTool,BatchTool"
+```
+
+**Code Review Tools:**
+```yaml
+allowed_tools: "Bash(git diff --name-only HEAD~1),Bash(git diff HEAD~1),View,GlobTool,GrepTool,Write"
+```
+
+**File Operations:**
+```yaml
+allowed_tools: "View,Write,GlobTool,GrepTool,BatchTool"
+```
+
+### Tool Restrictions
+
+**Disallow Dangerous Operations:**
+```yaml
+disallowed_tools: "Bash(rm *),Bash(sudo *),NetworkTool"
+```
+
+## MCP Configuration
+
+### Basic MCP Setup
+```yaml
+- name: Run Claude Code with MCP
+  uses: Akira-papa/claude-code-base-action@main
+  with:
+    prompt: "Access the custom MCP server"
+    mcp_config: "path/to/mcp-config.json"
+    allowed_tools: "mcp__server-name__custom_tool"
+```
+
+### MCP Config File Format
+```json
+{
+  "mcpServers": {
+    "server-name": {
+      "command": "node",
+      "args": ["./server.js"],
+      "env": {
+        "API_KEY": "your-api-key"
+      }
+    }
+  }
+}
+```
+
+## Output Handling Patterns
+
+### Capture Execution Results
+```yaml
+- name: Run Claude Code
+  id: claude-action
+  uses: Akira-papa/claude-code-base-action@main
+  with:
+    prompt: "Analyze the codebase"
+
+- name: Process Results
+  if: steps.claude-action.outputs.conclusion == 'success'
+  run: |
+    echo "Execution successful"
+    cat "${{ steps.claude-action.outputs.execution_file }}"
+```
+
+### Handle Failures
+```yaml
+- name: Handle Claude Code Failure
+  if: steps.claude-action.outputs.conclusion == 'failure'
+  run: |
+    echo "Claude Code execution failed"
+    exit 1
+```
+
+## Common Workflow Patterns
+
+### 1. PR Code Review
+From [README.md](mdc:README.md) example:
+- Checkout with full history
+- Run Claude Code with git diff tools
+- Extract review from execution log
+- Post as PR comment
+
+### 2. Issue Triage
+From [examples/issue-triage.yml](mdc:examples/issue-triage.yml):
+- Analyze issue content
+- Classify and label issues
+- Suggest initial responses
+
+### 3. Documentation Generation
+- Analyze code structure
+- Generate documentation
+- Update README or docs files
+
+## Best Practices
+
+### Security
+- Always use GitHub Secrets for sensitive data
+- Limit tool access with `allowed_tools`
+- Use `disallowed_tools` to prevent dangerous operations
+
+### Performance
+- Set appropriate `timeout_minutes`
+- Use `max_turns` to limit conversation length
+- Enable `use_node_cache` for Node.js projects
+
+### Reliability
+- Always check `conclusion` output
+- Handle both success and failure cases
+- Use specific tool configurations for your use case
+
+## Trigger Patterns
+
+### Common Triggers
+```yaml
+# On PR creation/update
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+# On issue creation
+on:
+  issues:
+    types: [opened]
+
+# On push to main
+on:
+  push:
+    branches: [main]
+
+# Manual trigger
+on:
+  workflow_dispatch:
+```

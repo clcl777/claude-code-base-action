@@ -1,0 +1,166 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Contribution Workflow
+
+## Getting Started
+
+Based on [CONTRIBUTING.md](mdc:CONTRIBUTING.md), contributors need:
+
+### Prerequisites
+- **Bun** runtime (version 1.2.11+ per [action.yml](mdc:action.yml))
+- **Docker** (for local GitHub Actions testing)
+- **act** tool (automatically installed by test script)
+- **Anthropic API key** (for testing)
+
+### Initial Setup
+1. Fork the repository on GitHub
+2. Clone locally: `git clone https://github.com/your-username/claude-code-base-action.git`
+3. Install dependencies: `bun install`
+4. Set API key: `export ANTHROPIC_API_KEY="your-api-key-here"`
+
+## Development Workflow
+
+### Available Commands
+From [package.json](mdc:package.json):
+- `bun test` - Run all tests
+- `bun run typecheck` - TypeScript validation  
+- `bun run format` - Format code with Prettier
+- `bun run format:check` - Check formatting
+- `bun run install-hooks` - Install Git hooks
+
+### Git Hooks Setup
+
+[scripts/install-hooks.sh](mdc:scripts/install-hooks.sh) installs pre-push hooks:
+- [scripts/pre-push](mdc:scripts/pre-push) runs format checks and tests before pushing
+
+## Pull Request Process
+
+### 1. Branch Creation
+```bash
+git checkout -b feature/your-feature-name
+```
+
+### 2. Development
+- Make changes following existing patterns in [src/](mdc:src)
+- Add tests in [test/](mdc:test) directory
+- Follow TypeScript strict mode (configured in [tsconfig.json](mdc:tsconfig.json))
+
+### 3. Pre-Commit Validation
+```bash
+bun test              # Run all tests
+bun run typecheck     # TypeScript validation
+bun run format:check  # Code formatting
+```
+
+### 4. Local Testing
+```bash
+./test-local.sh       # Full GitHub Actions workflow test
+```
+
+### 5. Commit and Push
+```bash
+git add .
+git commit -m "feat: add new feature"
+git push origin feature/your-feature-name
+```
+
+### 6. Create Pull Request
+- Ensure all CI checks pass
+- Request review from maintainers
+- Address feedback and update as needed
+
+## Code Standards
+
+### TypeScript Configuration
+[tsconfig.json](mdc:tsconfig.json) enforces:
+- Strict mode enabled
+- Modern ES modules
+- Node.js 20+ types
+
+### Code Style
+[.prettierrc](mdc:.prettierrc) defines formatting rules:
+- Consistent indentation and spacing
+- Automatic formatting via `bun run format`
+
+### File Organization
+- Source files in [src/](mdc:src) with kebab-case naming
+- Test files in [test/](mdc:test) with `.test.ts` suffix
+- Follow existing module patterns
+
+## Testing Requirements
+
+### Unit Tests
+- All new functionality must have tests
+- Follow patterns in existing test files
+- Use Bun's built-in test runner
+- Environment variable mocking for isolation
+
+### Integration Tests
+- Use [test-local.sh](mdc:test-local.sh) for full workflow testing
+- Requires Docker and valid API key
+- Tests complete action execution locally
+
+### CI Requirements
+All PRs must pass [.github/workflows/ci.yml](mdc:.github/workflows/ci.yml):
+- **Prettier**: Code formatting validation
+- **TypeScript**: Type checking
+- **Unit Tests**: Complete test suite
+
+## Common Contribution Areas
+
+### 1. Adding Authentication Methods
+- Update [src/validate-env.ts](mdc:src/validate-env.ts) for validation
+- Modify [src/run-claude.ts](mdc:src/run-claude.ts) for execution
+- Add inputs to [action.yml](mdc:action.yml)
+- Document in [README.md](mdc:README.md)
+- Add comprehensive tests
+
+### 2. Improving Error Handling
+- Update error messages in source files
+- Add test cases for new error conditions
+- Ensure proper GitHub Actions output setting
+
+### 3. Tool Configuration Enhancements
+- Modify tool handling in [src/run-claude.ts](mdc:src/run-claude.ts)
+- Add validation logic
+- Update documentation and examples
+
+## Release Process
+
+### Version Management
+- Releases managed through GitHub releases
+- [.github/workflows/update-major-tag.yml](mdc:.github/workflows/update-major-tag.yml) handles major tag updates
+
+### Documentation Updates
+- Update [README.md](mdc:README.md) with new features
+- Add examples to [examples/](mdc:examples) if applicable
+- Update [CLAUDE.md](mdc:CLAUDE.md) for technical details
+
+## Debugging Development Issues
+
+### Local Testing Problems
+- Ensure Docker is running: `docker ps`
+- Check API key is set: `echo $ANTHROPIC_API_KEY`
+- Use verbose mode: `act push -v --secret ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"`
+
+### Build Issues
+- Clear dependencies: `bun install --force`
+- Check TypeScript errors: `bun run typecheck`
+- Verify formatting: `bun run format:check`
+
+## Community Guidelines
+
+Follow [CODE_OF_CONDUCT.md](mdc:CODE_OF_CONDUCT.md) for community interactions.
+
+### Issue Reporting
+- Check existing issues before creating new ones
+- Provide minimal reproduction cases
+- Include environment details (OS, Bun version, etc.)
+
+### Feature Requests
+- Discuss in issues before implementation
+- Consider backward compatibility
+- Provide use cases and examples
