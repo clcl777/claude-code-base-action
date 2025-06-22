@@ -1,10 +1,12 @@
 import { exec, spawn } from "child_process";
-import { existsSync } from "fs";
+import { createWriteStream, existsSync } from "fs";
 import { chmod, mkdir, rmdir, unlink, writeFile } from "fs/promises";
 import { join } from "path";
 import { promisify } from "util";
 
 const execAsync = promisify(exec);
+
+const PIPE_PATH = "/tmp/claude_login_pipe";
 
 export interface RefreshTokenResult {
     success: boolean;
@@ -55,15 +57,23 @@ exit 0
         mockScriptsCreated = true;
         console.log("🔧 Created URL interception scripts");
 
+        // Create a named pipe for sending commands to Claude
+        try {
+            await unlink(PIPE_PATH);
+        } catch (e) {
+            // Ignore if file doesn't exist
+        }
+        await execAsync(`mkfifo "${PIPE_PATH}"`);
+
         // Set up environment with modified PATH
         const env = {
             ...process.env,
             PATH: `${tempDir}:${process.env.PATH}`,
         };
 
-        // Launch Claude Code process
+        // Launch Claude Code process with proper stdio configuration
         console.log("🔧 Launching Claude Code with URL interception...");
-        const claudeProcess = spawn("claude", [], {
+        const claudeProcess = spawn("claude", ["-p"], {
             stdio: ["pipe", "pipe", "pipe"],
             env: env
         });
@@ -103,7 +113,9 @@ exit 0
 
         // Simple menu detection
         const detectMenu = (text: string): boolean => {
-            return text.toLowerCase().includes("select login method");
+            return text.toLowerCase().includes("select login method") ||
+                text.toLowerCase().includes("choose") ||
+                text.toLowerCase().includes("option");
         };
 
         // Capture stdout
@@ -140,12 +152,29 @@ exit 0
             throw error;
         });
 
+        // Start sending /login command through named pipe
+        const sendLoginCommand = async () => {
+            const pipeStream = createWriteStream(PIPE_PATH);
+            pipeStream.write("/login\n");
+            pipeStream.end();
+        };
+
+        // Pipe from named pipe to Claude stdin
+        const pipeProcess = spawn("cat", [PIPE_PATH]);
+        pipeProcess.stdout.pipe(claudeProcess.stdin);
+
+        // Handle pipe process errors
+        pipeProcess.on("error", (error) => {
+            console.error("Error reading from named pipe:", error);
+            claudeProcess.kill("SIGTERM");
+        });
+
         // Wait for Claude to initialize
         await new Promise((resolve) => setTimeout(resolve, 1000));
 
         // Send /login command
         console.log("Sending /login command...");
-        claudeProcess.stdin.write("/login\n");
+        await sendLoginCommand();
 
         // Wait for menu detection and processing
         console.log("⏳ Waiting for login menu...");
@@ -201,6 +230,13 @@ exit 0
 
         console.log(`Claude process exited with code: ${exitCode}`);
 
+        // Clean up pipe process
+        try {
+            pipeProcess.kill("SIGTERM");
+        } catch (e) {
+            // Process may already be dead
+        }
+
         // Final check for intercepted URL
         if (!urlDetected) {
             const finalUrl = await checkInterceptedUrl();
@@ -226,6 +262,13 @@ exit 0
         const errorMessage = error instanceof Error ? error.message : String(error);
         return { success: false, error: errorMessage };
     } finally {
+        // Clean up named pipe
+        try {
+            await unlink(PIPE_PATH);
+        } catch (e) {
+            // Ignore cleanup errors
+        }
+
         // Clean up temporary files
         if (mockScriptsCreated) {
             try {
