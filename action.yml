@@ -111,17 +111,17 @@ runs:
       run: |
         # Self-hosted runner対応: 徹底的なクリーンアップ
         npm uninstall -g @anthropic-ai/claude-code 2>/dev/null || true
-        
+
         # 残存ファイルを手動削除（self-hosted runnerで必要）
         NPM_GLOBAL_ROOT=$(npm root -g 2>/dev/null || echo "/usr/local/lib/node_modules")
         rm -rf "$NPM_GLOBAL_ROOT/@anthropic-ai/claude-code" 2>/dev/null || true
         rm -rf "$NPM_GLOBAL_ROOT/@anthropic-ai/.claude-code-"* 2>/dev/null || true
-        
+
         # npmキャッシュクリア
         npm cache clean --force 2>/dev/null || true
-        
+
         # forceオプション付きでインストール
-        npm install -g @anthropic-ai/claude-code@1.0.2 --force
+        npm install -g @anthropic-ai/claude-code@1.0.43 --force
 
     - name: Run Claude Code Action
       shell: bash
